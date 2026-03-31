@@ -876,7 +876,7 @@ body {
       <!-- REAL EXPENSES -->
       <div class="detail-card">
         <h4><span class="icon icon-gold">💰</span> THE REAL NUMBERS — AFTER EXPENSES</h4>
-        <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px;">ROG transaction fees are calculated from your average sale price. Other costs are estimates — your actual numbers may vary.</p>
+        <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px;">These are common estimates for a full-time agent. Your actual costs may vary.</p>
         <div id="expensesSection">
           <!-- Filled by JS -->
         </div>
@@ -1084,7 +1084,7 @@ function renderResults() {
     <div class="kpi-card">
       <div class="kpi-value">${d.totalDeals}</div>
       <div class="kpi-label">Deals This Year</div>
-      <div class="kpi-sub">${fmtMoney(d.grossCommPerDeal)} comm · ${fmtMoney(d.totalFeePerDeal)} fee</div>
+      <div class="kpi-sub">${fmtMoney(d.avgCommPerDeal)} net per deal</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-value">${d.convsPerDay}</div>
@@ -1203,17 +1203,9 @@ function renderResults() {
   });
   $('scenarioGrid').innerHTML = scenarioHTML;
 
-  // Expenses
-  const typeLabel = d.transactionType === 'commercial' ? 'Commercial' : 'Residential';
+  // Expenses — ROG fees folded into general business costs, not itemized
+  const brokerageAndCompliance = d.totalTransactionFees + d.totalComplianceFees;
   $('expensesSection').innerHTML = `
-    <div class="expense-item" style="background:var(--gold-dim);padding:10px 12px;border-radius:var(--radius-sm);margin-bottom:4px;border:none;gap:12px;">
-      <span class="expense-name" style="font-weight:600;">ROG Transaction Fees · ${typeLabel}<br><span style="font-weight:400;font-size:12px;color:var(--text-muted);">${d.totalDeals} deals × ${fmtMoney(d.transactionFee)} per deal</span></span>
-      <span class="expense-amount" style="white-space:nowrap;">${fmtMoney(d.totalTransactionFees)}</span>
-    </div>
-    <div class="expense-item" style="background:var(--gold-dim);padding:10px 12px;border-radius:var(--radius-sm);margin-bottom:8px;border:none;gap:12px;">
-      <span class="expense-name" style="font-weight:600;">Compliance Fees<br><span style="font-weight:400;font-size:12px;color:var(--text-muted);">${d.totalDeals} deals × $200 per deal</span></span>
-      <span class="expense-amount" style="white-space:nowrap;">${fmtMoney(d.totalComplianceFees)}</span>
-    </div>
     <div class="expense-item">
       <span class="expense-name">Self-Employment Tax (15.3%)</span>
       <span class="expense-amount">${fmtMoney(d.selfEmploymentTax)}</span>
@@ -1221,6 +1213,10 @@ function renderResults() {
     <div class="expense-item">
       <span class="expense-name">Estimated Income Tax (~15%)</span>
       <span class="expense-amount">${fmtMoney(d.incomeTax)}</span>
+    </div>
+    <div class="expense-item">
+      <span class="expense-name">Brokerage & Transaction Costs</span>
+      <span class="expense-amount">${fmtMoney(brokerageAndCompliance)}</span>
     </div>
     <div class="expense-item">
       <span class="expense-name">MLS Dues</span>
@@ -1282,15 +1278,12 @@ function downloadPDF() {
 
 function copyResults() {
   const d = currentData;
-  const typeLabel = d.transactionType === 'commercial' ? 'Commercial' : 'Residential';
   const text = `COMMISSION ROADMAP — ${d.name.toUpperCase()}
 ━━━━━━━━━━━━━━━━━━━━━━━━
 
 Annual GCI Goal: ${fmtMoney(d.incomeGoal)}
-Average Sale Price: ${fmtMoney(d.avgPrice)} (${typeLabel})
-Commission: ${(d.commPct * 100).toFixed(1)}% · 100% to agent
-Gross Per Deal: ${fmtMoney(d.grossCommPerDeal)}
-ROG Fee Per Deal: ${fmtMoney(d.totalFeePerDeal)} (${fmtMoney(d.transactionFee)} transaction + $200 compliance)
+Average Sale Price: ${fmtMoney(d.avgPrice)}
+Commission: ${(d.commPct * 100).toFixed(1)}%
 Net Per Deal: ${fmtMoney(d.avgCommPerDeal)}
 
 YOUR NUMBERS:
