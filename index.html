@@ -751,17 +751,11 @@ body {
       </div>
 
       <div class="form-group">
-        <label>Your Commission Split</label>
-        <div class="hint">Your percentage of the commission after brokerage split</div>
-        <select id="commSplit">
-          <option value="1.0">100% (Capped / No Split)</option>
-          <option value="0.90">90/10</option>
-          <option value="0.85">85/15</option>
-          <option value="0.80" selected>80/20</option>
-          <option value="0.75">75/25</option>
-          <option value="0.70">70/30</option>
-          <option value="0.60">60/40</option>
-          <option value="0.50">50/50</option>
+        <label>Transaction Type</label>
+        <div class="hint">This determines your ROG transaction fee schedule</div>
+        <select id="transactionType">
+          <option value="residential" selected>Residential</option>
+          <option value="commercial">Commercial</option>
         </select>
       </div>
 
@@ -882,7 +876,7 @@ body {
       <!-- REAL EXPENSES -->
       <div class="detail-card">
         <h4><span class="icon icon-gold">💰</span> THE REAL NUMBERS — AFTER EXPENSES</h4>
-        <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px;">Adjust any number by clicking on it. These are estimates — your actual costs may vary.</p>
+        <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px;">ROG transaction fees are calculated from your average sale price. Other costs are estimates — your actual numbers may vary.</p>
         <div id="expensesSection">
           <!-- Filled by JS -->
         </div>
@@ -950,6 +944,53 @@ function updateSliders() {
   $('listingRatioDisplay').textContent = $('listingRatio').value + '% Listings';
 }
 
+// ===== ROG TRANSACTION FEE SCHEDULES =====
+const RESIDENTIAL_FEES = [
+  [100000, 50], [200000, 250], [400000, 500], [600000, 750],
+  [800000, 1000], [1000000, 1250], [1200000, 1500], [1400000, 1750],
+  [1600000, 2000], [1800000, 2250], [2000000, 2500], [2200000, 2750],
+  [2400000, 3000], [2600000, 3250], [2800000, 3500], [3000000, 3750],
+  [3200000, 4000], [3400000, 4250], [3600000, 4500], [3800000, 4750],
+  [4000000, 5000], [4200000, 5250], [4400000, 5500], [4600000, 5750],
+  [4800000, 6000], [5000000, 6250], [5200000, 6500], [5400000, 6750],
+  [5600000, 7000], [5800000, 7250], [6000000, 7500]
+];
+const COMMERCIAL_FEES = [
+  [100000, 150], [200000, 350], [400000, 800], [600000, 1050],
+  [800000, 1400], [1000000, 1800], [1200000, 2150], [1400000, 2400],
+  [1600000, 2700], [1800000, 2950], [2000000, 3200], [2200000, 3550],
+  [2400000, 3800], [2600000, 4100], [2800000, 4400], [3000000, 4750],
+  [3200000, 5000], [3400000, 5250], [3600000, 5500], [3800000, 5750],
+  [4000000, 6100], [4200000, 6350], [4400000, 6600], [4600000, 6900],
+  [4800000, 7200], [5000000, 7450], [5200000, 7700], [5400000, 7900],
+  [5600000, 8200], [5800000, 8450], [6000000, 8800]
+];
+const COMPLIANCE_FEE = 200;
+
+function lookupTransactionFee(salePrice, type) {
+  const schedule = type === 'commercial' ? COMMERCIAL_FEES : RESIDENTIAL_FEES;
+  // Over $6M: base of $7,500/$8,800 + $1,000 per additional $1M
+  if (salePrice > 6000000) {
+    const baseFee = type === 'commercial' ? 8800 : 7500;
+    const extraMillions = Math.ceil((salePrice - 6000000) / 1000000);
+    return baseFee + (extraMillions * 1000);
+  }
+  // Find the matching bracket
+  let fee = schedule[0][1];
+  for (let i = 0; i < schedule.length; i++) {
+    if (salePrice <= schedule[i][0]) {
+      fee = schedule[i][1];
+      break;
+    }
+    fee = schedule[i][1];
+  }
+  return fee;
+}
+
+function getTotalTransactionCost(salePrice, type) {
+  return lookupTransactionFee(salePrice, type) + COMPLIANCE_FEE;
+}
+
 // ===== CORE CALCULATION =====
 let currentData = {};
 
@@ -958,15 +999,21 @@ function calculateAndShowResults(overrideIncome) {
   const incomeGoal = overrideIncome || parseNum($('incomeGoal').value);
   const avgPrice = parseNum($('avgPrice').value);
   const commPct = parseNum($('commPct').value) / 100;
-  const split = parseFloat($('commSplit').value);
+  const transactionType = $('transactionType').value;
   const convToAppt = parseInt($('convToAppt').value) / 100;
   const apptToClient = parseInt($('apptToClient').value) / 100;
   const clientToClose = parseInt($('clientToClose').value) / 100;
   const listingRatio = parseInt($('listingRatio').value) / 100;
 
-  // Core math
-  const avgCommPerDeal = avgPrice * commPct * split;
-  const totalDeals = Math.ceil(incomeGoal / avgCommPerDeal);
+  // ROG fee lookup
+  const transactionFee = lookupTransactionFee(avgPrice, transactionType);
+  const totalFeePerDeal = transactionFee + COMPLIANCE_FEE;
+
+  // Core math — 100% commission, no split
+  const grossCommPerDeal = avgPrice * commPct;
+  const netCommPerDeal = grossCommPerDeal - totalFeePerDeal;
+  const avgCommPerDeal = netCommPerDeal; // what the agent actually keeps per deal
+  const totalDeals = Math.ceil(incomeGoal / netCommPerDeal);
   const signedClients = Math.ceil(totalDeals / clientToClose);
   const appointments = Math.ceil(signedClients / apptToClient);
   const conversations = Math.ceil(appointments / convToAppt);
@@ -975,7 +1022,7 @@ function calculateAndShowResults(overrideIncome) {
   const buyerDeals = totalDeals - listingDeals;
 
   // Time-based
-  const workingWeeks = 48; // 4 weeks vacation/holidays
+  const workingWeeks = 48;
   const workingDays = workingWeeks * 5;
   const workingMonths = 12;
 
@@ -997,7 +1044,8 @@ function calculateAndShowResults(overrideIncome) {
   const convsToDate = Math.round(conversations * (daysPassed / totalDays));
 
   // Expenses estimate
-  const brokerageFees = Math.round(incomeGoal * (1 - split) / split); // approximate
+  const totalTransactionFees = transactionFee * totalDeals;
+  const totalComplianceFees = COMPLIANCE_FEE * totalDeals;
   const selfEmploymentTax = Math.round(incomeGoal * 0.153);
   const incomeTax = Math.round(incomeGoal * 0.15);
   const mlsDues = 1200;
@@ -1005,17 +1053,19 @@ function calculateAndShowResults(overrideIncome) {
   const eAndO = 500;
   const marketing = Math.round(incomeGoal * 0.10);
   const techTools = 2400;
-  const totalExpenses = selfEmploymentTax + incomeTax + mlsDues + realtorDues + eAndO + marketing + techTools;
+  const totalExpenses = totalTransactionFees + totalComplianceFees + selfEmploymentTax + incomeTax + mlsDues + realtorDues + eAndO + marketing + techTools;
   const netIncome = incomeGoal - totalExpenses;
 
   currentData = {
-    name, incomeGoal, avgPrice, commPct, split, convToAppt, apptToClient,
-    clientToClose, listingRatio, avgCommPerDeal, totalDeals, signedClients,
-    appointments, conversations, listingDeals, buyerDeals, workingWeeks,
-    workingDays, convsPerWeek, convsPerDay, apptsPerWeek, dealsPerMonth,
-    closingsPerQuarter, pctYear, shouldHaveClosed, shouldHaveEarned,
-    convsToDate, selfEmploymentTax, incomeTax, mlsDues, realtorDues,
-    eAndO, marketing, techTools, totalExpenses, netIncome
+    name, incomeGoal, avgPrice, commPct, transactionType, convToAppt, apptToClient,
+    clientToClose, listingRatio, grossCommPerDeal, avgCommPerDeal, totalDeals,
+    signedClients, appointments, conversations, listingDeals, buyerDeals,
+    workingWeeks, workingDays, convsPerWeek, convsPerDay, apptsPerWeek,
+    dealsPerMonth, closingsPerQuarter, pctYear, shouldHaveClosed,
+    shouldHaveEarned, convsToDate, transactionFee, totalFeePerDeal,
+    totalTransactionFees, totalComplianceFees, selfEmploymentTax,
+    incomeTax, mlsDues, realtorDues, eAndO, marketing, techTools,
+    totalExpenses, netIncome
   };
 
   renderResults();
@@ -1034,7 +1084,7 @@ function renderResults() {
     <div class="kpi-card">
       <div class="kpi-value">${d.totalDeals}</div>
       <div class="kpi-label">Deals This Year</div>
-      <div class="kpi-sub">${fmtMoney(d.avgCommPerDeal)} per deal</div>
+      <div class="kpi-sub">${fmtMoney(d.grossCommPerDeal)} comm · ${fmtMoney(d.totalFeePerDeal)} fee</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-value">${d.convsPerDay}</div>
@@ -1154,7 +1204,16 @@ function renderResults() {
   $('scenarioGrid').innerHTML = scenarioHTML;
 
   // Expenses
+  const typeLabel = d.transactionType === 'commercial' ? 'Commercial' : 'Residential';
   $('expensesSection').innerHTML = `
+    <div class="expense-item" style="background:var(--gold-dim);padding:10px 12px;border-radius:var(--radius-sm);margin-bottom:4px;border:none;gap:12px;">
+      <span class="expense-name" style="font-weight:600;">ROG Transaction Fees · ${typeLabel}<br><span style="font-weight:400;font-size:12px;color:var(--text-muted);">${d.totalDeals} deals × ${fmtMoney(d.transactionFee)} per deal</span></span>
+      <span class="expense-amount" style="white-space:nowrap;">${fmtMoney(d.totalTransactionFees)}</span>
+    </div>
+    <div class="expense-item" style="background:var(--gold-dim);padding:10px 12px;border-radius:var(--radius-sm);margin-bottom:8px;border:none;gap:12px;">
+      <span class="expense-name" style="font-weight:600;">Compliance Fees<br><span style="font-weight:400;font-size:12px;color:var(--text-muted);">${d.totalDeals} deals × $200 per deal</span></span>
+      <span class="expense-amount" style="white-space:nowrap;">${fmtMoney(d.totalComplianceFees)}</span>
+    </div>
     <div class="expense-item">
       <span class="expense-name">Self-Employment Tax (15.3%)</span>
       <span class="expense-amount">${fmtMoney(d.selfEmploymentTax)}</span>
@@ -1223,13 +1282,16 @@ function downloadPDF() {
 
 function copyResults() {
   const d = currentData;
+  const typeLabel = d.transactionType === 'commercial' ? 'Commercial' : 'Residential';
   const text = `COMMISSION ROADMAP — ${d.name.toUpperCase()}
 ━━━━━━━━━━━━━━━━━━━━━━━━
 
 Annual GCI Goal: ${fmtMoney(d.incomeGoal)}
-Average Sale Price: ${fmtMoney(d.avgPrice)}
-Commission: ${(d.commPct * 100).toFixed(1)}% at ${(d.split * 100)}% split
-Average Per Deal: ${fmtMoney(d.avgCommPerDeal)}
+Average Sale Price: ${fmtMoney(d.avgPrice)} (${typeLabel})
+Commission: ${(d.commPct * 100).toFixed(1)}% · 100% to agent
+Gross Per Deal: ${fmtMoney(d.grossCommPerDeal)}
+ROG Fee Per Deal: ${fmtMoney(d.totalFeePerDeal)} (${fmtMoney(d.transactionFee)} transaction + $200 compliance)
+Net Per Deal: ${fmtMoney(d.avgCommPerDeal)}
 
 YOUR NUMBERS:
 • Total deals needed: ${d.totalDeals}
@@ -1266,7 +1328,7 @@ function startOver() {
   $('incomeGoal').value = '';
   $('avgPrice').value = '';
   $('commPct').value = '';
-  $('commSplit').value = '0.80';
+  $('transactionType').value = 'residential';
   $('convToAppt').value = 10;
   $('apptToClient').value = 50;
   $('clientToClose').value = 80;
