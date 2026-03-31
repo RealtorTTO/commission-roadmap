@@ -859,6 +859,7 @@ body {
       <!-- MONTHLY BREAKDOWN -->
       <div class="detail-card">
         <h4><span class="icon icon-gold">📅</span> MONTH-BY-MONTH CLOSINGS</h4>
+        <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px;">Target closings per month, weighted for seasonal demand. Spring and summer carry more deals.</p>
         <div class="monthly-grid" id="monthlyGrid">
           <!-- Filled by JS -->
         </div>
@@ -1175,6 +1176,7 @@ function renderResults() {
       <div class="month-cell ${isCurrent ? 'current' : ''}">
         <div class="month-name">${m}</div>
         <div class="month-deals">${monthDeals}</div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin:-2px 0 2px;">closing${monthDeals !== 1 ? 's' : ''}</div>
         <div class="month-income">${fmtMoney(monthIncome)}</div>
       </div>
     `;
